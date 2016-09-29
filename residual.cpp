@@ -126,6 +126,8 @@ void __computeResidual(const double youngs_mod, const double area, const double 
             residual-=4;
             unknowns-=4;
         }
+        
+        std::cout << "Hello world!" << std::endl;
 
         //Compute element residual
         computeElementResidual(youngs_mod, area, moment_of_inertia, int_rule, 
