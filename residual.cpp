@@ -14,11 +14,66 @@ void evaluate_N_lambda(const double xi, double* N_lambda){
     return;
 }
 
+void evaluate_N_u1(const double xi, double* N_u1){
+    N_u1[0] = -xi / 2. + xi * xi / 2.;
+    N_u1[1] = 1 - xi * xi;
+    N_u1[2] = xi / 2. + xi * xi / 2.;
+    return;
+}
+
 void evaluate_N_u2(const double xi, const double le, double* N_u2){
     N_u2[0] = 1 / 4. * (1 - xi) * (1 - xi) * (2 + xi);
     N_u2[1] = le / 8. * (1 - xi) * (1 - xi) * (1 + xi);
     N_u2[2] = 1 / 4. * (1 + xi) * (1 + xi) * (2 - xi);
     N_u2[3] = le / 8. * (1 + xi) * (1 + xi) * (xi - 1);
+    return;
+}
+
+void __generate_u1(int num_of_eval_pts_per_element, int num_dof, int num_elements, 
+                   const double* solution, const double* nodes, 
+                   double* x, double* u1){
+
+    double le, xi, delta_xi;
+    double N_u1[3];
+
+    //Evaluate at the last node
+    le = nodes[num_elements] - nodes[num_elements - 2];
+
+    evaluate_N_u1(1.0, N_u1);
+
+    u1[num_elements * num_of_eval_pts_per_element] = (N_u1[0] * solution[num_dof - 9] + 
+                                                      N_u1[1] * solution[num_dof - 5] +
+                                                      N_u1[2] * solution[num_dof - 4]);
+
+    x[num_elements * num_of_eval_pts_per_element] = nodes[num_elements * 2];
+
+    //Compute the increment of \xi for evaluation points in elements
+    delta_xi = 2. / num_of_eval_pts_per_element;
+
+    for (int i = 0; i < num_elements; ++i, solution+=5) {
+
+        le = nodes[i + 2] - nodes[i];
+
+        //Evaluate u2 at each evaluation point starting at the left
+        //side of the element.
+        for (int j = 0; j < num_of_eval_pts_per_element; ++j){
+            
+            xi = -1.0 + j * delta_xi;
+
+            evaluate_N_u1(xi, N_u1);
+
+            u1[i * num_of_eval_pts_per_element + j] = N_u1[0] * solution[0] + 
+                                                      N_u1[1] * solution[4] +
+                                                      N_u1[2] * solution[5];
+
+            //x[i * num_of_eval_pts_per_element + j] = nodes[i] + le / 2. * (xi + 1.0);
+            x[i * num_of_eval_pts_per_element + j] = N_u1[0] * nodes[i] +
+                                                     N_u1[1] * nodes[i + 1] +
+                                                     N_u1[2] * nodes[i + 2];
+        }
+
+    }
+
     return;
 }
 
@@ -31,23 +86,23 @@ void __generate_u2(int num_of_eval_pts_per_element, int num_dof, int num_element
     double N_u2[4];
 
     //Evaluate at the last node
-    le = nodes[num_elements] - nodes[num_elements - 1];
+    le = nodes[num_elements] - nodes[num_elements - 2];
 
     evaluate_N_u2(1.0, le, N_u2);
 
-    u2[num_elements * num_of_eval_pts_per_element] = (N_u2[0] * solution[num_dof - 4] + 
-                                                      N_u2[1] * solution[num_dof - 3] +
-                                                      N_u2[2] * solution[num_dof - 2] +
-                                                      N_u2[3] * solution[num_dof - 1]);
+    u2[num_elements * num_of_eval_pts_per_element] = (N_u2[0] * solution[num_dof - 8] + 
+                                                      N_u2[1] * solution[num_dof - 7] +
+                                                      N_u2[2] * solution[num_dof - 3] +
+                                                      N_u2[3] * solution[num_dof - 2]);
 
-    x[num_elements * num_of_eval_pts_per_element] = nodes[num_elements];
+    x[num_elements * num_of_eval_pts_per_element] = nodes[num_elements * 2];
 
     //Compute the increment of \xi for evaluation points in elements
     delta_xi = 2. / num_of_eval_pts_per_element;
 
-    for (int i = 0; i < num_elements; ++i, solution+=2) {
+    for (int i = 0; i < num_elements; ++i, solution+=5) {
 
-        le = nodes[i + 1] - nodes[i];
+        le = nodes[i + 2] - nodes[i];
 
         //Evaluate u2 at each evaluation point starting at the left
         //side of the element.
@@ -57,13 +112,11 @@ void __generate_u2(int num_of_eval_pts_per_element, int num_dof, int num_element
 
             evaluate_N_u2(xi, le, N_u2);
 
-            u2[i * num_of_eval_pts_per_element + j] = N_u2[0] * solution[0] + 
-                                                      N_u2[1] * solution[1] +
-                                                      N_u2[2] * solution[2] +
-                                                      N_u2[3] * solution[3];
+            u2[i * num_of_eval_pts_per_element + j] = N_u2[0] * solution[1] + 
+                                                      N_u2[1] * solution[2] +
+                                                      N_u2[2] * solution[6] +
+                                                      N_u2[3] * solution[7];
 
-            //x[i * num_of_eval_pts_per_element + j] = N_u2[0] * nodes[i] + 
-                                                     //N_u2[2] * nodes[i + 1];
             x[i * num_of_eval_pts_per_element + j] = nodes[i] + le / 2. * (xi + 1.0);
             
         }
@@ -126,6 +179,7 @@ void computeElementResidual1(const double youngs_mod, const double area, const d
         //       3 -> \lambda   - node 1
         //
         //       4 -> u_1       - node 2
+        //
         //       5 -> u_1       - node 3
         //       6 -> u_2       - node 3
         //       7 -> \theta    - node 3
@@ -150,8 +204,9 @@ void computeElementResidual1(const double youngs_mod, const double area, const d
                  d2N_u2_dxi2[3] * unknowns[7]) / J / J;
 
         //compute N_lambda . lambda
-        temp4 = N_lambda[0] * unknowns[3] + 
-                N_lambda[1] * unknowns[8];
+        //temp4 = N_lambda[0] * unknowns[3] + 
+                //N_lambda[1] * unknowns[8];
+        temp4 = 0.0;
 
         //compute element residual
         residual[0] += dN_u1_dxi[0] / J * (youngs_mod * area * (temp1 - 0.5 * temp2 * temp2) 
@@ -175,8 +230,10 @@ void computeElementResidual1(const double youngs_mod, const double area, const d
                        - 2. * temp4 * temp2) + d2N_u2_dxi2[3] / J / J * 
                        (youngs_mod * moment_of_inertia * temp3)) * wtsJ;
 
-        residual[3] += N_lambda[0] * ( (1. + temp1) * (1. + temp1) + temp2 * temp2 - 1.);
-        residual[8] += N_lambda[1] * ( (1. + temp1) * (1. + temp1) + temp2 * temp2 - 1.);
+        //residual[3] += N_lambda[0] * ( (1. + temp1) * (1. + temp1) + temp2 * temp2 - 1.);
+        //residual[8] += N_lambda[1] * ( (1. + temp1) * (1. + temp1) + temp2 * temp2 - 1.);
+        residual[3] += 0.0;
+        residual[8] += 0.0;
 
     }
 
@@ -243,7 +300,7 @@ void __computeResidual(const double youngs_mod, const double area, const double 
     for (int i = 0; i < num_elements; ++i) {
 
         //Compute element residual and sum into global
-        computeElementResidual2(youngs_mod, area, moment_of_inertia, int_rule, 
+        computeElementResidual1(youngs_mod, area, moment_of_inertia, int_rule, 
                                int_points, int_wts, &nodes[(num_of_nodes_per_element - 1) * i], 
                                &unknowns[(num_dofs_per_node) * i], 
                                &residual[(num_dofs_per_node) * i]);
