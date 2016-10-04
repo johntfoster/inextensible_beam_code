@@ -228,36 +228,11 @@ void computeElementResidual2(const double youngs_mod, const double area, const d
     return;
 }
 
-void __computeResidual1(const double youngs_mod, const double area, const double moment_of_inertia, 
-                       const int int_rule, const double* int_points, const double* int_wts, 
-                       const int num_elements, const double* nodes, const double* unknowns, 
-                       double* residual){
 
-
-    //Loop over elements for assembly into residual
-    for (int i = 0; i < num_elements; ++i, residual+=9, unknowns+=9, nodes+=3) {
-
-
-        //Move the pointers back for overlap in the assembly
-        if ( i != 0 ){
-            residual-=4;
-            unknowns-=4;
-        }
-        
-
-        //Compute element residual
-        computeElementResidual1(youngs_mod, area, moment_of_inertia, int_rule, 
-                               int_points, int_wts, nodes, unknowns, residual);
-
-    }
-
-    return;
-
-}
-
-void __computeResidual2(const double youngs_mod, const double area, const double moment_of_inertia, 
+void __computeResidual(const double youngs_mod, const double area, const double moment_of_inertia, 
                         const int int_rule, const double* int_points, const double* int_wts, 
-                        const int num_elements, const int num_dof, const double* nodes, 
+                        const int num_elements, const int num_of_nodes_per_element, 
+                        const int num_dofs_per_node, const int num_dof, const double* nodes, 
                         const double* unknowns, double* residual){
 
 
@@ -269,7 +244,9 @@ void __computeResidual2(const double youngs_mod, const double area, const double
 
         //Compute element residual and sum into global
         computeElementResidual2(youngs_mod, area, moment_of_inertia, int_rule, 
-                               int_points, int_wts, &nodes[i], &unknowns[2*i], &residual[2*i]);
+                               int_points, int_wts, &nodes[(num_of_nodes_per_element - 1) * i], 
+                               &unknowns[(num_dofs_per_node) * i], 
+                               &residual[(num_dofs_per_node) * i]);
 
     }
 
@@ -278,72 +255,74 @@ void __computeResidual2(const double youngs_mod, const double area, const double
 }
 
 
-void __computeJacobian(const double youngs_mod, const double area, const double moment_of_inertia, 
-                       const double delta, const int int_rule, const double* int_points, const double* int_wts, 
-                       const int num_elements, const int num_dof,  const double* nodes, 
-                       const double* unknowns, double* jacobian){
+//void __computeJacobian(const double youngs_mod, const double area, const double moment_of_inertia, 
+                       //const double delta, const int int_rule, const double* int_points, const double* int_wts, 
+                       //const int num_elements, const int num_dof,  const double* nodes, 
+                       //const double* unknowns, double* jacobian){
 
-  double f[num_dof];
-  double fp[num_dof];
-  double perturbed_unknowns[num_dof];
+  //double f[num_dof];
+  //double fp[num_dof];
+  //double perturbed_unknowns[num_dof];
 
-  double* f_ptr = f;
-  double* fp_ptr = fp;
+  //double* f_ptr = f;
+  //double* fp_ptr = fp;
 
-  //Copy unknowns to perturbed unknowns
-  memcpy(&perturbed_unknowns, &unknowns, num_dof*sizeof(double));
+  ////Copy unknowns to perturbed unknowns
+  //memcpy(&perturbed_unknowns, &unknowns, num_dof*sizeof(double));
 
-  //Compute reference residual, returns values to f_ptr
-  __computeResidual2(youngs_mod, area, moment_of_inertia, int_rule, int_points, int_wts, 
-                     num_elements, num_dof, nodes, unknowns, f_ptr);
+  ////Compute reference residual, returns values to f_ptr
+  //__computeResidual2(youngs_mod, area, moment_of_inertia, int_rule, int_points, int_wts, 
+                     //num_elements, num_dof, nodes, unknowns, f_ptr);
 
 
 
-  //Loop over all degrees of freedom (rows of jacobian)
-  for (int i = 0; i < num_dof; ++i) {
+  ////Loop over all degrees of freedom (rows of jacobian)
+  //for (int i = 0; i < num_dof; ++i) {
 
-      //Perturb a degree of freedom
-      perturbed_unknowns[i] += delta;
+      ////Perturb a degree of freedom
+      //perturbed_unknowns[i] += delta;
       
-      //Compute perturbed residual, returns values to fp_ptr
-      __computeResidual2(youngs_mod, area, moment_of_inertia, int_rule, int_points, int_wts, 
-                         num_elements, num_dof, nodes, perturbed_unknowns, fp_ptr);
+      ////Compute perturbed residual, returns values to fp_ptr
+      //__computeResidual2(youngs_mod, area, moment_of_inertia, int_rule, int_points, int_wts, 
+                         //num_elements, num_dof, nodes, perturbed_unknowns, fp_ptr);
 
 
-      //Compute forward difference jacobian
-      for (int j = 0; j  < num_dof; ++j){
-          jacobian[i * num_dof + j] = (fp[j] - f[j]) / delta;
-      }
+      ////Compute forward difference jacobian
+      //for (int j = 0; j  < num_dof; ++j){
+          //jacobian[i * num_dof + j] = (fp[j] - f[j]) / delta;
+      //}
 
-      //Reset the perturbed dof
-      perturbed_unknowns[i] = unknowns[i];
+      ////Reset the perturbed dof
+      //perturbed_unknowns[i] = unknowns[i];
 
-  }
+  //}
 
-  return;
+  //return;
 
-}
+//}
 
 extern "C"
 {
     extern void computeResidual(const double youngs_mod, const double area, const double moment_of_inertia, 
-                       const int int_rule, const double* int_points, const double* int_wts, 
-                       const int num_elements, const int num_dof, const double* nodes, const double* unknowns, 
-                       double* residual){
+                        const int int_rule, const double* int_points, const double* int_wts, 
+                        const int num_elements, const int num_of_nodes_per_element, 
+                        const int num_dofs_per_node, const int num_dof, const double* nodes, 
+                        const double* unknowns, double* residual){
 
-        return __computeResidual2(youngs_mod, area, moment_of_inertia, int_rule, int_points, int_wts, 
-                       num_elements, num_dof, nodes, unknowns, residual);
+        return __computeResidual(youngs_mod,  area,  moment_of_inertia, int_rule, int_points, int_wts, 
+                         num_elements,  num_of_nodes_per_element, num_dofs_per_node,  num_dof, nodes, 
+                         unknowns, residual);
     }
 
-    extern void computeJacobian(const double youngs_mod, const double area, const double moment_of_inertia, 
-                       const double delta, const int int_rule, const double* int_points, const double* int_wts, 
-                       const int num_elements, const int num_dof,  const double* nodes, 
-                       const double* unknowns, double* jacobian){
+    //extern void computeJacobian(const double youngs_mod, const double area, const double moment_of_inertia, 
+                       //const double delta, const int int_rule, const double* int_points, const double* int_wts, 
+                       //const int num_elements, const int num_dof,  const double* nodes, 
+                       //const double* unknowns, double* jacobian){
 
-        return __computeJacobian(youngs_mod, area, moment_of_inertia, delta, 
-                                 int_rule,  int_points,  int_wts, num_elements, 
-                                 num_dof, nodes, unknowns, jacobian);
-    }
+        //return __computeJacobian(youngs_mod, area, moment_of_inertia, delta, 
+                                 //int_rule,  int_points,  int_wts, num_elements, 
+                                 //num_dof, nodes, unknowns, jacobian);
+    //}
     
     extern void generate_u2(int num_of_eval_pts_per_element, int num_dof, int num_elements, 
                    const double* solution, const double* nodes, 
