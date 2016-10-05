@@ -29,7 +29,51 @@ void evaluate_N_u2(const double xi, const double le, double* N_u2){
     return;
 }
 
-void __generate_u1(int num_of_eval_pts_per_element, int num_dof, int num_elements, 
+void __evaluate_lambda(int num_of_eval_pts_per_element, int num_dof, int num_elements, 
+                       const double* solution, const double* nodes, 
+                       double* x, double* lambda){
+
+    double le, xi, delta_xi;
+    double N_lambda[2];
+
+    //Evaluate at the last node
+    le = nodes[num_elements] - nodes[num_elements - 2];
+
+    evaluate_N_lambda(1.0, N_lambda);
+
+    lambda[num_elements * num_of_eval_pts_per_element] = N_lambda[0] * solution[num_dof - 6] + 
+                                                         N_lambda[1] * solution[num_dof - 1];
+
+    x[num_elements * num_of_eval_pts_per_element] = nodes[num_elements * 2];
+
+    //Compute the increment of \xi for evaluation points in elements
+    delta_xi = 2. / num_of_eval_pts_per_element;
+
+    for (int i = 0; i < num_elements; ++i, solution+=5) {
+
+        le = nodes[2 * i + 2] - nodes[2 * i];
+
+        //Evaluate lambda at each evaluation point starting at the left
+        //side of the element.
+        for (int j = 0; j < num_of_eval_pts_per_element; ++j){
+            
+            xi = -1.0 + j * delta_xi;
+
+            evaluate_N_lambda(xi, N_lambda);
+
+            lambda[i * num_of_eval_pts_per_element + j] = N_lambda[0] * solution[3] + 
+                                                          N_lambda[1] * solution[8];
+
+            x[i * num_of_eval_pts_per_element + j] = N_lambda[0] * nodes[2 * i] +
+                                                     N_lambda[1] * nodes[2 * i + 2];
+        }
+
+    }
+
+    return;
+}
+
+void __evaluate_u1(int num_of_eval_pts_per_element, int num_dof, int num_elements, 
                    const double* solution, const double* nodes, 
                    double* x, double* u1){
 
@@ -52,7 +96,7 @@ void __generate_u1(int num_of_eval_pts_per_element, int num_dof, int num_element
 
     for (int i = 0; i < num_elements; ++i, solution+=5) {
 
-        le = nodes[i + 2] - nodes[i];
+        le = nodes[2 * i + 2] - nodes[2 * i];
 
         //Evaluate u2 at each evaluation point starting at the left
         //side of the element.
@@ -67,9 +111,9 @@ void __generate_u1(int num_of_eval_pts_per_element, int num_dof, int num_element
                                                       N_u1[2] * solution[5];
 
             //x[i * num_of_eval_pts_per_element + j] = nodes[i] + le / 2. * (xi + 1.0);
-            x[i * num_of_eval_pts_per_element + j] = N_u1[0] * nodes[i] +
-                                                     N_u1[1] * nodes[i + 1] +
-                                                     N_u1[2] * nodes[i + 2];
+            x[i * num_of_eval_pts_per_element + j] = N_u1[0] * nodes[2*i] +
+                                                     N_u1[1] * nodes[2*i + 1] +
+                                                     N_u1[2] * nodes[2*i + 2];
         }
 
     }
@@ -78,7 +122,7 @@ void __generate_u1(int num_of_eval_pts_per_element, int num_dof, int num_element
 }
 
 
-void __generate_u2(int num_of_eval_pts_per_element, int num_dof, int num_elements, 
+void __evaluate_u2(int num_of_eval_pts_per_element, int num_dof, int num_elements, 
                    const double* solution, const double* nodes, 
                    double* x, double* u2){
 
@@ -102,7 +146,7 @@ void __generate_u2(int num_of_eval_pts_per_element, int num_dof, int num_element
 
     for (int i = 0; i < num_elements; ++i, solution+=5) {
 
-        le = nodes[i + 2] - nodes[i];
+        le = nodes[2 * i + 2] - nodes[2 * i];
 
         //Evaluate u2 at each evaluation point starting at the left
         //side of the element.
@@ -117,7 +161,7 @@ void __generate_u2(int num_of_eval_pts_per_element, int num_dof, int num_element
                                                       N_u2[2] * solution[6] +
                                                       N_u2[3] * solution[7];
 
-            x[i * num_of_eval_pts_per_element + j] = nodes[i] + le / 2. * (xi + 1.0);
+            x[i * num_of_eval_pts_per_element + j] = nodes[2*i] + le / 2. * (xi + 1.0);
             
         }
 
@@ -204,9 +248,9 @@ void computeElementResidual1(const double youngs_mod, const double area, const d
                  d2N_u2_dxi2[3] * unknowns[7]) / J / J;
 
         //compute N_lambda . lambda
-        //temp4 = N_lambda[0] * unknowns[3] + 
-                //N_lambda[1] * unknowns[8];
-        temp4 = 0.0;
+        temp4 = N_lambda[0] * unknowns[3] + 
+                N_lambda[1] * unknowns[8];
+        //temp4 = 0.0;
 
         //compute element residual
         residual[0] += dN_u1_dxi[0] / J * (youngs_mod * area * (temp1 - 0.5 * temp2 * temp2) 
@@ -230,10 +274,8 @@ void computeElementResidual1(const double youngs_mod, const double area, const d
                        - 2. * temp4 * temp2) + d2N_u2_dxi2[3] / J / J * 
                        (youngs_mod * moment_of_inertia * temp3)) * wtsJ;
 
-        //residual[3] += N_lambda[0] * ( (1. + temp1) * (1. + temp1) + temp2 * temp2 - 1.);
-        //residual[8] += N_lambda[1] * ( (1. + temp1) * (1. + temp1) + temp2 * temp2 - 1.);
-        residual[3] += 0.0;
-        residual[8] += 0.0;
+        residual[3] += N_lambda[0] * ( (1. + temp1) * (1. + temp1) + temp2 * temp2 - 1.);
+        residual[8] += N_lambda[1] * ( (1. + temp1) * (1. + temp1) + temp2 * temp2 - 1.);
 
     }
 
@@ -381,12 +423,28 @@ extern "C"
                                  //num_dof, nodes, unknowns, jacobian);
     //}
     
-    extern void generate_u2(int num_of_eval_pts_per_element, int num_dof, int num_elements, 
+    extern void evaluate_u2(int num_of_eval_pts_per_element, int num_dof, int num_elements, 
                    const double* solution, const double* nodes, 
                    double* x, double* u2){
 
-        return __generate_u2(num_of_eval_pts_per_element, num_dof, num_elements, 
+        return __evaluate_u2(num_of_eval_pts_per_element, num_dof, num_elements, 
                              solution, nodes, x, u2);
+    }
+
+    extern void evaluate_u1(int num_of_eval_pts_per_element, int num_dof, int num_elements, 
+                   const double* solution, const double* nodes, 
+                   double* x, double* u1){
+
+        return __evaluate_u1(num_of_eval_pts_per_element, num_dof, num_elements, solution, 
+                   nodes, x, u1);
+    }
+
+    extern void evaluate_lambda(int num_of_eval_pts_per_element, int num_dof, int num_elements, 
+                   const double* solution, const double* nodes, 
+                   double* x, double* lambda){
+
+        return __evaluate_lambda(num_of_eval_pts_per_element, num_dof, num_elements, 
+                   solution, nodes, x, lambda);
     }
 
 }
