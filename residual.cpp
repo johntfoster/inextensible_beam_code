@@ -452,6 +452,101 @@ void computeElementResidual2(const double youngs_mod, const double area, const d
     return;
 }
 
+void computeElementResidual3(const double youngs_mod, const double area, const double moment_of_inertia, 
+                            const int int_rule, const double* int_points, const double* int_wts, 
+                            const double* nodes, const double* unknowns, double* residual){
+        
+    double le, J, wtsJ, temp1, temp2, temp3, temp4;
+    double dN_u1_dxi[3];
+    double dN_u2_dxi[4];
+    double d2N_u2_dxi2[4];
+    double N_lambda[2];
+
+    //compute element length
+    //compute Jacobian
+    le = nodes[2] - nodes[0];
+    J = le / 2.;
+
+    //Loop over integration points
+    for(int i = 0; i < int_rule; ++i){
+
+        //compute dNu1dxi
+        evaluate_dN_u1_dxi(int_points[i], dN_u1_dxi);
+        //compute dNu2dxi
+        evaluate_dN_u2_dxi(int_points[i], le, dN_u2_dxi);
+        //compute d2Nu2dxixi
+        evaluate_d2N_u2_dxi2(int_points[i], le, d2N_u2_dxi2);
+        //compute N_lambda
+        evaluate_N_lambda(int_points[i], N_lambda);
+
+        //multiply Jacobian into integration weights
+        wtsJ = int_wts[i] * J;
+
+        // dofs: 0 -> u_1       - node 1
+        //       1 -> u_2       - node 1
+        //       2 -> \theta    - node 1
+        //       3 -> \lambda   - node 1
+        //
+        //       4 -> u_1       - node 2
+        //
+        //       5 -> u_1       - node 3
+        //       6 -> u_2       - node 3
+        //       7 -> \theta    - node 3
+        //       8 -> \lambda   - node 3 
+
+        //compute dN_u1_dxi . u1
+        temp1 = (dN_u1_dxi[0] * unknowns[0] + 
+                 dN_u1_dxi[1] * unknowns[4] + 
+                 dN_u1_dxi[2] * unknowns[5]) / J;
+
+        //compute dN_u2_dxi . u2
+        temp2 = (dN_u2_dxi[0] * unknowns[1] + 
+                 dN_u2_dxi[1] * unknowns[2] + 
+                 dN_u2_dxi[2] * unknowns[6] +
+                 dN_u2_dxi[3] * unknowns[7]) / J;
+
+
+        //compute d2N_u2_dxi2 . u2
+        temp3 = (d2N_u2_dxi2[0] * unknowns[1] + 
+                 d2N_u2_dxi2[1] * unknowns[2] + 
+                 d2N_u2_dxi2[2] * unknowns[6] +
+                 d2N_u2_dxi2[3] * unknowns[7]) / J / J;
+
+        //compute N_lambda . lambda
+        temp4 = N_lambda[0] * unknowns[3] + 
+                N_lambda[1] * unknowns[8];
+        //temp4 = 0.0;
+
+        //compute element residual
+        residual[0] += dN_u1_dxi[0] / J * (youngs_mod * area * (temp1 - 0.5 * temp2 * temp2) 
+                       - 2. * temp4 * (1. + temp1)) * wtsJ;
+        residual[4] += dN_u1_dxi[1] / J * (youngs_mod * area * (temp1 - 0.5 * temp2 * temp2) 
+                       - 2. * temp4 * (1. + temp1)) * wtsJ;
+        residual[5] += dN_u1_dxi[2] / J * (youngs_mod * area * (temp1 - 0.5 * temp2 * temp2) 
+                       - 2. * temp4 * (1. + temp1)) * wtsJ;
+
+
+        residual[1] += (dN_u2_dxi[0] / J * ((youngs_mod * area * (temp1 - 0.5 * temp2 * temp2)) * temp2  
+                       - 2. * temp4 * temp2) + d2N_u2_dxi2[0] / J / J * 
+                       (youngs_mod * moment_of_inertia * temp3)) * wtsJ;
+        residual[2] += (dN_u2_dxi[1] / J * ((youngs_mod * area * (temp1 - 0.5 * temp2 * temp2)) * temp2  
+                       - 2. * temp4 * temp2) + d2N_u2_dxi2[1] / J / J * 
+                       (youngs_mod * moment_of_inertia * temp3)) * wtsJ;
+        residual[6] += (dN_u2_dxi[2] / J * ((youngs_mod * area * (temp1 - 0.5 * temp2 * temp2)) * temp2  
+                       - 2. * temp4 * temp2) + d2N_u2_dxi2[2] / J / J * 
+                       (youngs_mod * moment_of_inertia * temp3)) * wtsJ;
+        residual[7] += (dN_u2_dxi[3] / J * ((youngs_mod * area * (temp1 - 0.5 * temp2 * temp2)) * temp2  
+                       - 2. * temp4 * temp2) + d2N_u2_dxi2[3] / J / J * 
+                       (youngs_mod * moment_of_inertia * temp3)) * wtsJ;
+
+        residual[3] += N_lambda[0] * ( (1. + temp1) * (1. + temp1) + temp2 * temp2 - 1.);
+        residual[8] += N_lambda[1] * ( (1. + temp1) * (1. + temp1) + temp2 * temp2 - 1.);
+
+    }
+
+    return;
+}
+
 
 void __computeResidual(const int beam_type_flag, const double youngs_mod, const double area, 
                        const double moment_of_inertia, const int int_rule, const double* int_points, 
@@ -474,6 +569,11 @@ void __computeResidual(const int beam_type_flag, const double youngs_mod, const 
                                &residual[(num_dofs_per_node) * i]);
         } else if (beam_type_flag == 1){
         computeElementResidual2(youngs_mod, area, moment_of_inertia, int_rule, 
+                               int_points, int_wts, &nodes[(num_of_nodes_per_element - 1) * i], 
+                               &unknowns[(num_dofs_per_node) * i], 
+                               &residual[(num_dofs_per_node) * i]);
+        } else if (beam_type_flag == 2){
+        computeElementResidual3(youngs_mod, area, moment_of_inertia, int_rule, 
                                int_points, int_wts, &nodes[(num_of_nodes_per_element - 1) * i], 
                                &unknowns[(num_dofs_per_node) * i], 
                                &residual[(num_dofs_per_node) * i]);
