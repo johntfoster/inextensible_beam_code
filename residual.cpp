@@ -1,6 +1,87 @@
 #include <iostream>
 #include <math.h>
 
+template<unsigned p, unsigned k> 
+//p = interpolation order, k = derivative of basis function, k = 0 returns basis
+//function itself
+struct Bspline {
+    static void evaluate(const double x, const unsigned int num_knots, const double* knot_vector, double* N) {
+
+        if (k == 0) { // Compute the basis function
+
+            Bspline<p - 1, 0>::evaluate(x, num_knots, knot_vector, N);
+
+            for (int i = 0; i < num_knots - p; ++i) {
+
+                if (fabs(knot_vector[i + p] - knot_vector[i]) < 1e-15)
+                    N[i] *= 0.0;
+                else
+                    N[i] *= (x - knot_vector[i]) / (knot_vector[i + p] - knot_vector[i]);
+
+                if (fabs(knot_vector[i + p + 1] - knot_vector[i + 1]) < 1e-15)
+                    N[i] += 0.0;
+                else
+                    N[i] += (knot_vector[i + p + 1] - x) / 
+                            (knot_vector[i + p + 1] - knot_vector[i + 1]) * N[i + 1];
+                
+            }
+
+            return;
+        
+        } else { // Compute kth derivative
+
+            Bspline<p - 1, k - 1>::evaluate(x, num_knots, knot_vector, N);
+
+            for (int i = 0; i < num_knots - p; ++i) {
+
+                if (fabs(knot_vector[i + p] - knot_vector[i]) < 1e-15)
+                    N[i] *= 0.0;
+                else
+                    N[i] *= p / (knot_vector[i + p] - knot_vector[i]);
+
+                if (fabs(knot_vector[i + p + 1] - knot_vector[i + 1]) < 1e-15)
+                    N[i] += 0.0;
+                else
+                    N[i] -= p / (knot_vector[i + p + 1] - knot_vector[i + 1]) * N[i + 1];
+            }
+
+            return;
+
+        }
+    }
+};
+
+
+template<> 
+struct Bspline<0, 0>{
+  static void evaluate(const double x, const int num_knots, const double* knot_vector, double* N){
+
+        for (int i = 0; i < num_knots; ++i) {
+
+            if (x > knot_vector[i] && x < knot_vector[i + 1])
+                N[i] = 1.;
+            else
+                N[i] = 0.;
+        }
+    }
+};
+
+void evaluate_N_u1_4node(const double xi, double* N_u1){
+   N_u1[0] = -0.0625 + xi / 16. + (9 * xi * xi) / 16. - (9* xi * xi * xi) / 16.;
+   N_u1[1] =  0.5625 - (27 * xi) / 16. - (9 * xi * xi) / 16. + (27 * xi * xi * xi) / 16.;
+   N_u1[2] =  0.5625 + (27 * xi) / 16. - (9 * xi * xi) / 16. - (27 * xi * xi * xi) / 16.;
+   N_u1[3] = -0.0625 - xi / 16. + (9 * xi * xi) / 16. + (9* xi * xi * xi) /16.;
+   return;
+}
+
+void evaluate_dN_u1_dxi_4node(const double xi, double* dN_u1_dxi){
+   dN_u1_dxi[0] = 0.0625 + (9 * xi) / 8. - (27 * xi * xi) / 16.;
+   dN_u1_dxi[1] = -1.6875 - (9 * xi) / 8. + (81 * xi * xi) / 16.;
+   dN_u1_dxi[2] = 1.6875 - (9 * xi) / 8. - (81 * xi * xi) / 16.;
+   dN_u1_dxi[3] = -0.0625 + (9 * xi) / 8. + (27 * xi * xi) / 16.;
+   return;
+}
+
 void evaluate_dN_u1_dxi(const double xi, double* dN_u1_dxi){
     dN_u1_dxi[0] = 1. / 2. * (-1 + xi) + xi / 2.; 
     dN_u1_dxi[1] = -2. * xi; 
@@ -685,6 +766,12 @@ extern "C"
 
         return __evaluate_constraint(num_of_eval_pts_per_element, num_dof, num_elements, 
                        solution, nodes, x, constraint);
+    }
+
+    extern void evaluate_Bspline_p1(const double x, const int num_knots, 
+            const double* knot_vector, double* N){
+
+        return Bspline<1, 0>::evaluate(x, num_knots, knot_vector, N);
     }
 
 }
