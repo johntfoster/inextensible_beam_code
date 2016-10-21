@@ -16,4 +16,4 @@ RUN conda install --quiet --yes \
 ADD residual.cpp residual.cpp
 ADD bspline.hpp bspline.hpp
 
-RUN c++ -g -o _residual.so residual.cpp -std=c++14 -fPIC -shared 
+RUN c++ -g -o $HOME/notebooks/_residual.so residual.cpp -std=c++14 -fPIC -shared 
