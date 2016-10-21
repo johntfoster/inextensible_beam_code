@@ -975,7 +975,9 @@ void __computeResidual(const int beam_type_flag, const double youngs_mod, const 
 
 
     //Ensure that residual is 0.0
-    memset(residual, 0.0, num_dof*sizeof(double));
+    for (int i = 0; i < num_dof; ++i) {
+        residual[i] = 0.0;
+    }
 
     //Loop over elements for assembly into residual
     for (int i = 0; i < num_elements; ++i) {
